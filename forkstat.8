@@ -42,7 +42,9 @@ Title	Description
 Time	When the fork/exec/exit event occurred.
 Event	Type of event.
 PID	Process or thread ID.
-Info	Parent or child if a fork, or process exit(2) value.
+Info	T{
+Parent or child if a fork, or on exit the process return code, e.g. ret(0), or the terminating signal, e.g. sig(9).
+T}
 Duration	T{
 On exit, the duration the command ran for in seconds.
 T}

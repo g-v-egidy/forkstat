@@ -876,7 +876,7 @@ static void print_heading(void)
 
 	pid_size = pid_max_digits();
 
-	(void)printf("Time     Event %*.*s %s%sInfo   Duration Process\n",
+	(void)printf("Time     Event %*.*s %s%sInfo     Duration Process\n",
 		pid_size, pid_size, "PID",
 		(opt_flags & OPT_EXTRA) ? "    UID    EUID TTY    " : "",
 		(opt_flags & OPT_GLYPH) ? " " : "");
@@ -1439,6 +1439,25 @@ static char *extra_info(const uid_t uid)
 
 	return buf;
 }
+
+/*
+ *  exit_status_str()
+ *	format raw exit status from the kernel (wait() status encoding)
+ *	into human readable form, like e.g. ret(5) or sig(15).
+ */
+static const char *exit_status_str(const uint32_t exit_code)
+{
+	static char buf[16];
+	const unsigned int sig = exit_code & 0x7f;
+
+	if (sig == 0) {
+		(void)snprintf(buf, sizeof(buf), "ret(%u)",
+			(exit_code >> 8) & 0xff);
+	} else {
+		(void)snprintf(buf, sizeof(buf), "sig(%u)", sig);
+	}
+	return buf;
+}
 #endif
 
 /*
@@ -1631,18 +1650,19 @@ static int monitor(const int sock)
 						const char * const type = is_thread ? "clone" : "fork";
 
 						row_increment();
-						(void)printf("%s %-5.5s %*d %s%sparent %8s %s%s%s\n",
+						(void)printf("%s %-5.5s %*d %s%s%-8s %8s %s%s%s\n",
 							when,
 							type,
 							pid_size, ppid,
 							extra_info(ppid),
 							(opt_flags & OPT_GLYPH) ? "\u252c" : "",
+							"parent",
 							"",
 							info1->kernel_thread ? "[" : "",
 							info1->cmdline,
 							info1->kernel_thread ? "]" : "");
 						row_increment();
-						(void)printf("%s %-5.5s %*d %s%s%6.6s %8s %s%s%s\n",
+						(void)printf("%s %-5.5s %*d %s%s%-8s %8s %s%s%s\n",
 							when,
 							type,
 							pid_size, pid,
@@ -1665,11 +1685,12 @@ static int monitor(const int sock)
 				info1 = proc_info_update(pid);
 				if (!(opt_flags & OPT_QUIET) && (opt_flags & OPT_EV_EXEC)) {
 					row_increment();
-					(void)printf("%s exec  %*d %s%s       %8s %s%s%s\n",
+					(void)printf("%s exec  %*d %s%s%-8s %8s %s%s%s\n",
 						when,
 						pid_size, pid,
 						extra_info(pid),
 						(opt_flags & OPT_GLYPH) ? "\u2192" : "",
+						"",
 						"",
 						info1->kernel_thread ? "[" : "",
 						info1->cmdline,
@@ -1700,12 +1721,12 @@ static int monitor(const int sock)
 						(void)snprintf(duration, sizeof(duration), "unknown");
 					}
 					row_increment();
-					(void)printf("%s exit  %*d %s%s%6d %8s %s%s%s\n",
+					(void)printf("%s exit  %*d %s%s%-8s %8s %s%s%s\n",
 						when,
 						pid_size, pid,
 						extra_info(pid),
 						(opt_flags & OPT_GLYPH) ? "\u21e5" : "",
-						proc_ev->event_data.exit.exit_code,
+						exit_status_str(proc_ev->event_data.exit.exit_code),
 						duration,
 						info1->kernel_thread ? "[" : "",
 						info1->cmdline,
@@ -1723,7 +1744,7 @@ static int monitor(const int sock)
 					if ((opt_pgrp >= 0) && (opt_pgrp != pgrp))
 						break;
 					if (proc_ev->what == PROC_EVENT_UID) {
-						(void)printf("%s uid   %*d %s%s%6s %8s %s%s%s\n",
+						(void)printf("%s uid   %*d %s%s%-8s %8s %s%s%s\n",
 							when,
 							pid_size, pid,
 							extra_info(pid),
@@ -1734,10 +1755,11 @@ static int monitor(const int sock)
 							info1->cmdline,
 							info1->kernel_thread ? "]" : "");
 					} else {
-						(void)printf("%s gid   %*d %6s %s%8s %s%s%s\n",
+						(void)printf("%s gid   %*d %s%s%-8s %8s %s%s%s\n",
 							when,
 							pid_size, pid,
 							extra_info(pid),
+							(opt_flags & OPT_GLYPH) ? " " : "",
 							get_username(proc_ev->event_data.id.e.euid),
 							"",
 							info1->kernel_thread ? "[" : "",
@@ -1755,7 +1777,7 @@ static int monitor(const int sock)
 					pgrp = getpgid(pid);
 					if ((opt_pgrp >= 0) && (opt_pgrp != pgrp))
 						break;
-					(void)printf("%s sid   %*d %s%s%6d %8s %s%s%s\n",
+					(void)printf("%s sid   %*d %s%s%-8d %8s %s%s%s\n",
 						when,
 						pid_size, pid,
 						extra_info(pid),
@@ -1778,11 +1800,12 @@ static int monitor(const int sock)
 						break;
 					info1 = proc_info_get(pid);
 					row_increment();
-					(void)printf("%s core  %*d %s%s       %8s %s%s%s\n",
+					(void)printf("%s core  %*d %s%s%-8s %8s %s%s%s\n",
 						when,
 						pid_size, pid,
 						extra_info(pid),
 						(opt_flags & OPT_GLYPH) ? "\u2620" : "",
+						"",
 						"",
 						info1->kernel_thread ? "[" : "",
 						info1->cmdline,
@@ -1807,7 +1830,7 @@ static int monitor(const int sock)
 						break;
 					info1 = proc_info_get(pid);
 					row_increment();
-					(void)printf("%s ptrce %*d %s%s%6s %8s %s%s%s\n",
+					(void)printf("%s ptrce %*d %s%s%-8s %8s %s%s%s\n",
 						when,
 						pid_size, pid,
 						extra_info(pid),
@@ -1832,7 +1855,7 @@ static int monitor(const int sock)
 					comm = proc_cmdline(pid);
 					row_increment();
 
-					(void)printf("%s comm  %*d %s%s%s       %8s %s%s%s -> %s\n",
+					(void)printf("%s comm  %*d %s%s%-8s %8s %s%s%s -> %s\n",
 						when,
 						pid_size, pid,
 						extra_info(pid),
